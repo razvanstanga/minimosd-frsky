@@ -53,6 +53,8 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 //#define membug 
 //#define FORCEINIT  // You should never use this unless you know what you are doing 
 
+#define FRSKY
+//#define FRSKY_DEBUG
 
 // AVR Includes
 #include <FastSerial.h>
