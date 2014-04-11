@@ -137,11 +137,12 @@ void read_mavlink(){
                 crlf_count = 0;
             }
             if (crlf_count == 3) {
-                //uploadFont();
+                uploadFont();
             }
         }
         
         if (data == START_STOP) {
+          lastMAVBeat = millis();
           mavlink_active = 1;
           dataState = STATE_DATA_IN_FRAME;
           bufferIndex = 0;

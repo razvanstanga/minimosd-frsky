@@ -716,7 +716,7 @@ void panWarn(int first_col, int first_line){
           }
  if (rotation > 5) rotation = 0;
 #ifdef FRSKY
-  if (warning[4] == 1 || warning[0] == 0) {
+  if (warning[4] == 1 && rotation == 5) {
         osd.printf("%s",warning_string);  
   }
 #else
@@ -884,8 +884,11 @@ void panBatt_A(int first_col, int first_line){
         osd.printf(" %c%5.2f%c", 0xbc, (double)osd_vbat_A, 0x0d);
     else osd.printf("%c%5.2f%c%c", 0xbc, (double)osd_vbat_A, 0x0d, osd_battery_pic_A);
     */
-//    osd.printf("%c%5.2f%c", 0xbc, (double)osd_vbat_A, 0x0d);
+#ifdef FRSKY    
+    osd.printf("%c%5.2f%c", 0xbc, (double)osd_vbat_A, 0x0d);
+#else    
     osd.printf("%5.2f%c", (double)osd_vbat_A, 0x0d);
+#endif    
     osd.closePanel();
 }
 
