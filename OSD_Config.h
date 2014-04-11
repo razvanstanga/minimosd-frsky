@@ -49,7 +49,7 @@
 #define Off_BIT        1
 #define WindS_BIT      2
 #define Climb_BIT      3
-//#define Tune_BIT       4
+#define Tune_BIT       4
 #define CALLSIGN_BIT   5
 #define RSSI_BIT       6
 #define Eff_BIT        7
@@ -163,9 +163,9 @@
 #define panClimb_en_ADDR 182
 #define panClimb_x_ADDR 184
 #define panClimb_y_ADDR 186
-//#define panTune_en_ADDR 188
-//#define panTune_x_ADDR 190
-//#define panTune_y_ADDR 192
+#define panTune_en_ADDR 188
+#define panTune_x_ADDR 190
+#define panTune_y_ADDR 192
 #define panEff_en_ADDR 194
 #define panEff_x_ADDR 196
 #define panEff_y_ADDR 198
@@ -185,6 +185,12 @@
 #define panDistance_x_ADDR 226
 #define panDistance_y_ADDR 228
 
+#define SIGN_MSL_ON_ADDR 876
+#define SIGN_HA_ON_ADDR 878
+#define SIGN_GS_ON_ADDR 880
+#define SIGN_AS_ON_ADDR 882 
+#define MODELL_TYPE_ADD 884 
+#define AUTO_SCREEN_SWITC_ADD 886
 #define OSD_BATT_SHOW_PERCENT_ADDR 888
 #define measure_ADDR 890
 #define overspeed_ADDR 892
@@ -206,6 +212,12 @@
 
 #define OSD_CALL_SIGN_ADDR 920
 #define OSD_CALL_SIGN_TOTAL 8
+#define FW_VERSION1_ADDR 930
+#define FW_VERSION2_ADDR 932
+#define FW_VERSION3_ADDR 934
+#define CS_VERSION1_ADDR 936
+#define CS_VERSION2_ADDR 938
+#define CS_VERSION3_ADDR 940
 
 #define CHK1 1000
 #define CHK2 1006

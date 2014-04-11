@@ -70,7 +70,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 #include "wiring.h"
 #endif
 #include <EEPROM.h>
-#include <SimpleTimer.h>
+//#include <SimpleTimer.h>
 #include <GCS_MAVLink.h>
 
 #ifdef membug
@@ -97,7 +97,7 @@ along with this program. If not, see <http://www.gnu.org/licenses/>
 FastSerialPort0(Serial);
 OSD osd; //OSD object 
 
-SimpleTimer  mavlinkTimer;
+//SimpleTimer  mavlinkTimer;
 
 
 /* **********************************************/
@@ -159,11 +159,11 @@ void setup()
 delay(2000);
 Serial.flush(); 
     // Startup MAVLink timers  
-    mavlinkTimer.Set(&OnMavlinkTimer, 120);
+    //mavlinkTimer.Set(&OnMavlinkTimer, 120);
 
     // House cleaning, clear display and enable timers
-    osd.clear();
-    mavlinkTimer.Enable();
+//    osd.clear();
+    //mavlinkTimer.Enable();
 
 } // END of setup();
 
@@ -177,7 +177,7 @@ Serial.flush();
 void loop() 
 {
 
-    if(enable_mav_request == 1){//Request rate control
+    /*if(enable_mav_request == 1){//Request rate control
         //osd.clear();
         //osd.setPanel(3,10);
         //osd.openPanel();
@@ -192,10 +192,15 @@ void loop()
         osd.clear();
         waitingMAVBeats = 0;
         lastMAVBeat = millis();//Preventing error from delay sensing
+    }*/
+    
+    //Run "timer" every 120 miliseconds
+    if(millis() > mavLinkTimer + 120){
+      mavLinkTimer = millis();
+      OnMavlinkTimer();
     }
-
     read_mavlink();
-    mavlinkTimer.Run();
+    //mavlinkTimer.Run();
 }
 
 /* *********************************************** */
@@ -212,8 +217,9 @@ void OnMavlinkTimer()
     writePanels();       // writing enabled panels (check OSD_Panels Tab)
     
     setFdataVars();
+    
+    checkModellType();
 }
-
 
 void unplugSlaves(){
     //Unplug list of SPI

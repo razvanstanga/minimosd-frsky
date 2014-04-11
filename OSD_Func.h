@@ -48,10 +48,10 @@ void setHomeVars(OSD &osd)
   float dstlon, dstlat;
   long bearing;
   
-  if(osd_throttle > 3 && takeoff_heading == -400)
-    takeoff_heading = osd_heading;
+//  if(osd_throttle > 3 && takeoff_heading == -400)
+//    takeoff_heading = osd_heading;
   osd_alt_to_home = (osd_alt - osd_home_alt);
-  if(osd_got_home == 0 && osd_fix_type > 1){
+  if(osd_got_home == 0 && osd_fix_type == 3){
     osd_home_lat = osd_lat;
     osd_home_lon = osd_lon;
     //osd_home_alt = osd_alt;
@@ -59,19 +59,19 @@ void setHomeVars(OSD &osd)
   }
   else if(osd_got_home == 1){
     // JRChange: osd_home_alt: check for stable osd_alt (must be stable for 25*120ms = 3s)
-    if(osd_alt_cnt < 25){
-      if(fabs(osd_alt_prev - osd_alt) > 0.5){
-        osd_alt_cnt = 0;
-        osd_alt_prev = osd_alt;
-      }
-      else
-      {
-        if(++osd_alt_cnt >= 25){
-          osd_home_alt = osd_alt;  // take this stable osd_alt as osd_home_alt
-          haltset = 1;
-        }
-      }
-    }
+//    if(osd_alt_cnt < 25){
+//      if(fabs(osd_alt_prev - osd_alt) > 0.5){
+//        osd_alt_cnt = 0;
+//        osd_alt_prev = osd_alt;
+//      }
+//      else
+//      {
+//        if(++osd_alt_cnt >= 25){
+//          osd_home_alt = osd_alt;  // take this stable osd_alt as osd_home_alt
+//          haltset = 1;
+//        }
+//      }
+//    }
     // shrinking factor for longitude going to poles direction
     float rads = fabs(osd_home_lat) * 0.0174532925;
     double scaleLongDown = cos(rads);
@@ -100,7 +100,7 @@ void setHomeVars(OSD &osd)
 
 void setFdataVars(){
 
-  if (haltset == 1 && takeofftime == 0 && osd_alt_to_home > 5 && osd_throttle > 10){
+  if (takeofftime == 0 && osd_alt_to_home > 5 && osd_throttle > 10){
     takeofftime = 1;
     tdistance = 0;
     FTime = (millis()/1000);
@@ -122,5 +122,13 @@ void setFdataVars(){
     if (osd_alt_to_home > max_osd_home_alt) max_osd_home_alt = osd_alt_to_home;
     if (osd_windspeed > max_osd_windspeed) max_osd_windspeed = osd_windspeed;
   }
+
+}
+
+void checkModellType(){
+if (EEPROM.read(MODELL_TYPE_ADD) != 0) EEPROM.write(MODELL_TYPE_ADD, 0);
+if (EEPROM.read(FW_VERSION1_ADDR) != 2) EEPROM.write(FW_VERSION1_ADDR, 2);
+if (EEPROM.read(FW_VERSION2_ADDR) != 4) EEPROM.write(FW_VERSION2_ADDR, 4);
+if (EEPROM.read(FW_VERSION3_ADDR) != 1) EEPROM.write(FW_VERSION3_ADDR, 1);
 }
 

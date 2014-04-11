@@ -2,8 +2,6 @@
 #include "../GCS_MAVLink/include/mavlink/v1.0/ardupilotmega/mavlink.h"
 
 #ifdef FRSKY
-#ifndef SPort_H
-#define SPort_H
 
 #define FRSKY_RX_PACKET_SIZE 0x09
 
@@ -44,10 +42,19 @@
 #define CURR_LAST_ID       0x020f
 #define VFAS_FIRST_ID      0x0210
 #define VFAS_LAST_ID       0x021f
-#define GPS_SPEED_FIRST_ID 0x0830
-#define GPS_SPEED_LAST_ID  0x083f
 #define CELLS_FIRST_ID     0x0300
 #define CELLS_LAST_ID      0x030f
+
+#define GPS_LONG_LATI_FIRST_ID  0x0800
+#define GPS_LONG_LATI_LAST_ID   0x080f
+#define GPS_ALT_FIRST_ID        0x0820
+#define GPS_ALT_LAST_ID         0x082f
+#define GPS_SPEED_FIRST_ID      0x0830
+#define GPS_SPEED_LAST_ID       0x083f
+#define GPS_COURS_FIRST_ID      0x0840
+#define GPS_COURS_LAST_ID       0x084f
+#define GPS_TIME_DATE_FIRST_ID  0x0850
+#define GPS_TIME_DATE_LAST_ID   0x085f
 
 #define SPORT_DATA_U8(packet)   (buffer[4])
 #define SPORT_DATA_S32(packet)  (*((int32_t *)(buffer+4)))
@@ -56,17 +63,16 @@
 long          _varioSpeed;
 long          _varioAltitude;
 unsigned long _altitudeOffset;
+unsigned long _baroAltitude;
 int           _vfasVoltage;
 int           _vfasCurrent;
 unsigned long _vfasConsumption;
 unsigned long _uptime;
-int           mySerialStarted;
+unsigned int   osd_swr;
+//unsigned int   osd_rssi;
+float          _cellVoltage;
+static float   osd_analog_batt = 0;                 // Battery A voltage in milivolt
 
-static byte buffer[FRSKY_RX_PACKET_SIZE];
-static byte bufferIndex = 0;
-static byte dataState = STATE_DATA_IDLE;
-
-#endif
 #endif
 
 // true when we have received at least 1 MAVLink packet
@@ -97,6 +103,10 @@ void read_mavlink(){
     mavlink_message_t msg; 
     mavlink_status_t status;
 
+    static byte buffer[FRSKY_RX_PACKET_SIZE];
+    static byte bufferIndex = 0;
+    static byte dataState = STATE_DATA_IDLE;
+
 #ifdef FRSKY_DEBUG
     if ( Serial.available() ) {
       osd.setPanel(5,9);
@@ -111,9 +121,11 @@ void read_mavlink(){
     }
 #endif
 
+
     //grabing data 
-    while(Serial.available() > 0) {
+    while(Serial.available() > 0) { 
 #ifdef FRSKY
+
         byte data = Serial.read();
     
         /* allow CLI to be started by hitting enter 3 times, if no
@@ -125,29 +137,31 @@ void read_mavlink(){
                 crlf_count = 0;
             }
             if (crlf_count == 3) {
-                uploadFont();
+                //uploadFont();
             }
-        } else {
-            //mavlink_active = 1;
         }
-    
+        
         if (data == START_STOP) {
+          mavlink_active = 1;
           dataState = STATE_DATA_IN_FRAME;
           bufferIndex = 0;
           
-          mavbeat = 1;
-          //apm_mav_system    = msg.sysid;
-          //apm_mav_component = msg.compid;
-          osd_mode = 1;
-          //Mode (arducoper armed/disarmed)
-          //base_mode = mavlink_msg_heartbeat_get_base_mode(&msg);
-          motor_armed = 1;
-    
-          osd_nav_mode = 0;
-          lastMAVBeat = millis();
-          if(waitingMAVBeats == 1){
-              enable_mav_request = 1;
-          }
+                    mavbeat = 1;
+                    apm_mav_system    = 0;
+                    apm_mav_component = 0;
+//                    apm_mav_type      = mavlink_msg_heartbeat_get_type(&msg);            
+                 //   osd_mode = mavlink_msg_heartbeat_get_custom_mode(&msg);
+                    //osd_mode = (uint8_t)mavlink_msg_heartbeat_get_custom_mode(&msg);
+                    //Mode (arducoper armed/disarmed)
+                    //base_mode = mavlink_msg_heartbeat_get_base_mode(&msg);
+//                    if(getBit(base_mode,7)) motor_armed = 1;
+//                    else motor_armed = 0;
+
+                    osd_nav_mode = 0;          
+                    /*lastMAVBeat = millis();
+                    if(waitingMAVBeats == 1){
+                        enable_mav_request = 1;
+                    }*/
           
         } else {
           switch (dataState) {
@@ -165,7 +179,6 @@ void read_mavlink(){
         }
     
         if (bufferIndex == FRSKY_RX_PACKET_SIZE) {
-          mavlink_active = 1;
           dataState = STATE_DATA_IDLE;
     
           short crc = 0;
@@ -178,42 +191,141 @@ void read_mavlink(){
           }
           if (crc == 0x00ff) {
             byte packetType = buffer[1];
+            
+            
             switch (packetType) {
               case DATA_FRAME:
                 unsigned int appId = *((unsigned int *)(buffer+2));
     
+                if (appId == RSSI_ID) {
+                  osd_rssi = SPORT_DATA_U8(buffer);
+                  //Serial.println ("osd_rssi");
+                  //Serial.println (osd_rssi);
+                }
+                if (appId == SWR_ID) {
+                  osd_swr = SPORT_DATA_U8(buffer);
+                  //Serial.println ("osd_swr");
+                  //Serial.println (osd_swr);                  
+                }
+                if (appId == BATT_ID) {
+                  osd_analog_batt = SPORT_DATA_U8(buffer);
+                  //Serial.println ("osd_analog_batt");
+                  //Serial.println (osd_analog_batt);                                    
+                }
+    
                 if (appId >= VARIO_FIRST_ID && appId <= VARIO_LAST_ID) {
-                  osd_groundspeed = SPORT_DATA_S32(buffer);
-    
+                  osd_airspeed = SPORT_DATA_S32(buffer);
+                  //Serial.println ("osd_airspeed");
+                  //Serial.println (osd_airspeed);
+                  
                 } else if (appId >= ALT_FIRST_ID && appId <= ALT_LAST_ID) {
-                    if (_altitudeOffset == 0)
-                      _altitudeOffset = -SPORT_DATA_S32(buffer);
-    
-                  osd_alt = SPORT_DATA_S32(buffer) + _altitudeOffset;
-    
+                  //if (_altitudeOffset == 0) _altitudeOffset = -SPORT_DATA_S32(buffer);
+                  
+                  setBaroAltitude( SPORT_DATA_S32(buffer) );
+                  //Serial.println ("osd_alt");
+                  //Serial.println (_baroAltitude/100, 2);
+                  osd_alt = float(_baroAltitude/100);
                 } else if (appId >= VFAS_FIRST_ID && appId <= VFAS_LAST_ID) {
-                  osd_vbat_A = SPORT_DATA_S32(buffer) * 10;
-    
+                  osd_vbat_A = SPORT_DATA_U32(buffer);
+                  //Serial.println ("osd_vbat_A");
+                  //Serial.println (float(osd_vbat_A/100));
+                  osd_vbat_A = float(osd_vbat_A/100);
+                  
                 } else if (appId >= CURR_FIRST_ID && appId <= CURR_LAST_ID) {
                   osd_curr_A = SPORT_DATA_U32(buffer);
-    
+                  osd_curr_A = float(osd_curr_A/100);
                   unsigned long now = micros();
-                  osd_battery_remaining_A += (long)osd_curr_A * 1000 / (3600000000 /
-                                                                  (now - _uptime));
+                  //osd_battery_remaining_A += (long)osd_curr_A * 1000 / (3600000000 / (now - _uptime));
+                  //Serial.println ("osd_curr_A");
+                  //Serial.println (osd_curr_A);
+                  
                   _uptime = now;
-    
-                } else if (appId == RSSI_ID) {
-                  osd_rssi = SPORT_DATA_U32(buffer);
+                } else if (appId >= CELLS_FIRST_ID && appId <= CELLS_LAST_ID) {
+                  uint32_t cells = SPORT_DATA_U32(buffer);
+                  uint8_t battnumber = cells & 0xF;
+                  //Serial.println ("battnumber");
+                  //Serial.println (battnumber);
+                  _cellVoltage = ((((cells & 0x000FFF00) >> 8) / 10)*2);
+                  //Serial.println ("cellVoltage");
+                  //Serial.println ( cellVoltage/100, 2 );
+                   osd_battery_remaining_A = float(_cellVoltage/100);
+                  
+                } else if (appId >= GPS_SPEED_FIRST_ID && appId <= GPS_SPEED_LAST_ID) {
+                   osd_groundspeed = SPORT_DATA_U32(buffer);
+                   osd_groundspeed = (osd_groundspeed * 46) / 25 / 1000;
+                   //Serial.println ("osd_groundspeed");
+                   //Serial.println (osd_groundspeed);                   
+                   
+                } else if (appId >= GPS_COURS_FIRST_ID && appId <= GPS_COURS_LAST_ID) {
+                   osd_heading = SPORT_DATA_U32(buffer);
+                   //frskyData.hub.gpsCourse_bp = course / 100;
+                   //frskyData.hub.gpsCourse_ap = course % 100;  
+                   //Serial.println ("osd_heading");
+                   //Serial.println (osd_heading);                                      
+                   
+                } else if (appId >= GPS_TIME_DATE_FIRST_ID && appId <= GPS_TIME_DATE_LAST_ID) {
+                    uint32_t gps_time_date = SPORT_DATA_U32(buffer);
+                    //Serial.println ("gps_time_date");
+                    //Serial.println (gps_time_date);                                                          
+                    
+                    if (gps_time_date & 0x000000ff) {
+                      //frskyData.hub.year = (uint16_t) ((gps_time_date & 0xff000000) >> 24);
+                      //frskyData.hub.month = (uint8_t) ((gps_time_date & 0x00ff0000) >> 16);
+                      //frskyData.hub.day = (uint8_t) ((gps_time_date & 0x0000ff00) >> 8);
+                    }
+                    else {
+                      //frskyData.hub.hour = (uint8_t) ((gps_time_date & 0xff000000) >> 24);
+                      //frskyData.hub.min = (uint8_t) ((gps_time_date & 0x00ff0000) >> 16);
+                      //frskyData.hub.sec = (uint16_t) ((gps_time_date & 0x0000ff00) >> 8);
+                      //frskyData.hub.hour = ((uint8_t) (frskyData.hub.hour + g_eeGeneral.timezone + 24)) % 24;
+                    }
+                   
+                } else if (appId >= GPS_ALT_FIRST_ID && appId <= GPS_ALT_LAST_ID) {
+                   //osd_alt = SPORT_DATA_S32(buffer);   
+                   
+                } else if (appId >= GPS_LONG_LATI_FIRST_ID && appId <= GPS_LONG_LATI_LAST_ID) {
+                    uint32_t gps_long_lati_data = SPORT_DATA_U32(buffer);
+                    uint32_t gps_long_lati_b1w, gps_long_lati_a1w;
+                    gps_long_lati_b1w = (gps_long_lati_data & 0x3fffffff) / 10000;
+                    gps_long_lati_a1w = (gps_long_lati_data & 0x3fffffff) % 10000;
+                    osd_heading = 0;
+                    switch ((gps_long_lati_data & 0xc0000000) >> 30) {
+                      case 0:
+                        osd_lat = (gps_long_lati_b1w / 60 * 100) + (gps_long_lati_b1w % 60);
+                        //osd_lat = gps_long_lati_a1w;
+                        //frskyData.hub.gpsLatitudeNS = 'N';
+                        osd_heading = 0;
+                        break;
+                      case 1:
+                        osd_lat = (gps_long_lati_b1w / 60 * 100) + (gps_long_lati_b1w % 60);
+                        //osd_lat = gps_long_lati_a1w;
+                        //frskyData.hub.gpsLatitudeNS = 'S';
+                        osd_heading = 90;
+                        break;
+                      case 2:
+                        osd_lon = (gps_long_lati_b1w / 60 * 100) + (gps_long_lati_b1w % 60);
+                        //osd_lon = gps_long_lati_a1w;
+                        //frskyData.hub.gpsLongitudeEW = 'E';
+                        osd_heading = 180;
+                        break;
+                      case 3:
+                        osd_lon = (gps_long_lati_b1w / 60 * 100) + (gps_long_lati_b1w % 60);
+                        //osd_lon = gps_long_lati_a1w;
+                        //frskyData.hub.gpsLongitudeEW = 'W';
+                        osd_heading = 360;
+                        break;
+                    }                   
                 }
                 break;
             }
+            
+            
           }
         }
-#endif
 
-#ifndef FRSKY
+#else
         uint8_t c = Serial.read();
-        
+
         /* allow CLI to be started by hitting enter 3 times, if no
         heartbeat packets have been received */
         if (mavlink_active == 0 && millis() < 20000 && millis() > 5000) {
@@ -222,13 +334,14 @@ void read_mavlink(){
             } else {
                 crlf_count = 0;
             }
-            if (crlf_count == 3) {
-                uploadFont();
-            }
-        }        
-        
+//            if (crlf_count == 3) {
+//                uploadFont();
+//            }
+        }
+
         //trying to grab msg  
         if(mavlink_parse_char(MAVLINK_COMM_0, c, &msg, &status)) {
+            lastMAVBeat = millis();
             mavlink_active = 1;
             //handle msg
             switch(msg.msgid) {
@@ -242,14 +355,14 @@ void read_mavlink(){
                     osd_mode = (uint8_t)mavlink_msg_heartbeat_get_custom_mode(&msg);
                     //Mode (arducoper armed/disarmed)
                     base_mode = mavlink_msg_heartbeat_get_base_mode(&msg);
-                    if(getBit(base_mode,7)) motor_armed = 1;
-                    else motor_armed = 0;
+//                    if(getBit(base_mode,7)) motor_armed = 1;
+//                    else motor_armed = 0;
 
                     osd_nav_mode = 0;          
-                    lastMAVBeat = millis();
+                    /*lastMAVBeat = millis();
                     if(waitingMAVBeats == 1){
                         enable_mav_request = 1;
-                    }
+                    }*/
                 }
                 break;
             case MAVLINK_MSG_ID_SYS_STATUS:
@@ -269,6 +382,8 @@ void read_mavlink(){
                     osd_lon = mavlink_msg_gps_raw_int_get_lon(&msg) / 10000000.0f;
                     osd_fix_type = mavlink_msg_gps_raw_int_get_fix_type(&msg);
                     osd_satellites_visible = mavlink_msg_gps_raw_int_get_satellites_visible(&msg);
+                    osd_cog = mavlink_msg_gps_raw_int_get_cog(&msg);
+                    eph = mavlink_msg_gps_raw_int_get_eph(&msg);
                 }
                 break; 
             case MAVLINK_MSG_ID_VFR_HUD:
@@ -295,8 +410,8 @@ void read_mavlink(){
 //                  nav_bearing = mavlink_msg_nav_controller_output_get_nav_bearing(&msg);
                   wp_target_bearing = mavlink_msg_nav_controller_output_get_target_bearing(&msg);
                   wp_dist = mavlink_msg_nav_controller_output_get_wp_dist(&msg);
-//                  alt_error = mavlink_msg_nav_controller_output_get_alt_error(&msg);
-//                  aspd_error = mavlink_msg_nav_controller_output_get_aspd_error(&msg);
+                  alt_error = mavlink_msg_nav_controller_output_get_alt_error(&msg);
+                  aspd_error = mavlink_msg_nav_controller_output_get_aspd_error(&msg);
                   xtrack_error = mavlink_msg_nav_controller_output_get_xtrack_error(&msg);
                 }
                 break;
@@ -320,14 +435,21 @@ void read_mavlink(){
                 break;           
             case MAVLINK_MSG_ID_WIND:
                 {
-                    osd_winddirection = abs(mavlink_msg_wind_get_direction(&msg)); // 0..360 deg, 0=north
-                    osd_windspeed = mavlink_msg_wind_get_speed(&msg); //m/s
-//                    osd_windspeedz = mavlink_msg_wind_get_speed_z(&msg); //m/s
+//                  if (osd_climb < 1.66 && osd_climb > -1.66){
+                  osd_winddirection = mavlink_msg_wind_get_direction(&msg); // 0..360 deg, 0=north
+                  osd_windspeed = mavlink_msg_wind_get_speed(&msg); //m/s
+//                  osd_windspeedz = mavlink_msg_wind_get_speed_z(&msg); //m/s
+//                  }
                 }
                 break;
             case MAVLINK_MSG_ID_SCALED_PRESSURE:
                 {
                     temperature = mavlink_msg_scaled_pressure_get_temperature(&msg);
+                }
+                break;
+            case MAVLINK_MSG_ID_GLOBAL_POSITION_INT:
+                {
+                    osd_home_alt = osd_alt - (mavlink_msg_global_position_int_get_relative_alt(&msg)*0.001);
                 }
                 break;
             default:
@@ -336,6 +458,7 @@ void read_mavlink(){
             }
         }
 #endif
+        
         delayMicroseconds(138);
         //next one
     }
@@ -344,3 +467,17 @@ void read_mavlink(){
     parse_error += status.parse_error;
 
 }
+
+#ifdef FRSKY
+void setBaroAltitude(float baroAltitude)
+{
+  if (!_altitudeOffset)
+    _altitudeOffset = -baroAltitude;
+
+  baroAltitude += _altitudeOffset;
+  _baroAltitude = baroAltitude;
+  if (_baroAltitude < 0 || _baroAltitude > 1000000) {
+    _baroAltitude = 0;
+  }
+}
+#endif
