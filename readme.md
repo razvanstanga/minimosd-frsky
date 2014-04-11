@@ -18,13 +18,13 @@ Working:
 - battery voltage from current sensor
 - cell voltage (in remaining battery slot) from lipo voltage sensor
 - amperage (to be tested) from current sensor
-- altitide form bario sensor
+- altitude form bario sensor
 - low battery warning
 - you can use Config. Tool to edit the settings
 
 I used the following sources to write it:
-https://code.google.com/p/minimosd-extra
-https://github.com/zendes/SPort_OSD
-https://github.com/zendes/SPort
-https://code.google.com/p/telemetry-convert/wiki/FrSkySPortProtocol
-https://code.google.com/p/opentx/source/browse/trunk/src/telemetry/frsky_sport.cpp
+- https://code.google.com/p/minimosd-extra
+- https://github.com/zendes/SPort_OSD
+- https://github.com/zendes/SPort
+- https://code.google.com/p/telemetry-convert/wiki/FrSkySPortProtocol
+- https://code.google.com/p/opentx/source/browse/trunk/src/telemetry/frsky_sport.cpp
