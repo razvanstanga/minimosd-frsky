@@ -60,19 +60,12 @@
 #define SPORT_DATA_S32(packet)  (*((int32_t *)(buffer+4)))
 #define SPORT_DATA_U32(packet)  (*((uint32_t *)(buffer+4)))
 
-long          _varioSpeed;
-long          _varioAltitude;
-unsigned long _altitudeOffset;
-unsigned long _baroAltitude;
-int           _vfasVoltage;
-int           _vfasCurrent;
-unsigned long _vfasConsumption;
+unsigned long _baro_altitude;
+unsigned long _altitude_offset;
 unsigned long _uptime;
-unsigned int   osd_swr;
-//unsigned int   osd_rssi;
-float          _cellVoltage;
-static float   osd_analog_batt = 0;                 // Battery A voltage in milivolt
-float          pack_max_voltage;
+unsigned int  _osd_swr;
+float         _cell_voltage;
+static float  _osd_analog_batt = 0;                 // Battery A voltage in milivolt
 
 #endif
 
@@ -205,14 +198,14 @@ void read_mavlink(){
                   //Serial.println (osd_rssi);
                 }
                 if (appId == SWR_ID) {
-                  osd_swr = SPORT_DATA_U8(buffer);
+                  _osd_swr = SPORT_DATA_U8(buffer);
                   //Serial.println ("osd_swr");
                   //Serial.println (osd_swr);                  
                 }
                 if (appId == BATT_ID) {
-                  osd_analog_batt = SPORT_DATA_U8(buffer);
+                  _osd_analog_batt = SPORT_DATA_U8(buffer);
                   //Serial.println ("osd_analog_batt");
-                  //Serial.println (osd_analog_batt);                                    
+                  //Serial.println (_osd_analog_batt);                                    
                 }
     
                 if (appId >= VARIO_FIRST_ID && appId <= VARIO_LAST_ID) {
@@ -225,8 +218,8 @@ void read_mavlink(){
                   
                   setBaroAltitude( SPORT_DATA_S32(buffer) );
                   //Serial.println ("osd_alt");
-                  //Serial.println (_baroAltitude/100, 2);
-                  osd_alt = float(_baroAltitude/100);
+                  //Serial.println (_baro_altitude/100, 2);
+                  osd_alt = float(_baro_altitude/100);
                 } else if (appId >= VFAS_FIRST_ID && appId <= VFAS_LAST_ID) {
                   osd_vbat_A = SPORT_DATA_U32(buffer);
                   //Serial.println ("osd_vbat_A");
@@ -247,21 +240,20 @@ void read_mavlink(){
                   //osd_battery_remaining_A = (long)osd_curr_A * 1000 / (3600000000 / (now - _uptime));
                   //Serial.println ("osd_curr_A");
                   //Serial.println (osd_curr_A);
-                  
-                  _uptime = now;
+                  //_uptime = now;
                 } else if (appId >= CELLS_FIRST_ID && appId <= CELLS_LAST_ID) {
                   uint32_t cells = SPORT_DATA_U32(buffer);
                   uint8_t battnumber = cells & 0xF;
                   //Serial.println ("battnumber");
                   //Serial.println (battnumber);
-                  _cellVoltage = ((((cells & 0x000FFF00) >> 8) / 10)*2);
-                  //Serial.println ("cellVoltage");
-                  //Serial.println ( cellVoltage/100, 2 );
+                  _cell_voltage = ((((cells & 0x000FFF00) >> 8) / 10)*2);
+                  //Serial.println ("cell_voltage");
+                  //Serial.println ( cell_voltage/100, 2 );
                   // use cells as temperature to use CT
-                  _cellVoltage = float(_cellVoltage/100);
-                  osd_battery_remaining_A = ((_cellVoltage-3.72)*100) / (4.2-3.72);
+                  _cell_voltage = float(_cell_voltage/100);
+                  osd_battery_remaining_A = ((_cell_voltage-3.72)*100) / (4.2-3.72);
                   
-                  temperature = _cellVoltage;
+                  temperature = _cell_voltage;
                   
                 } else if (appId >= GPS_SPEED_FIRST_ID && appId <= GPS_SPEED_LAST_ID) {
                    osd_groundspeed = SPORT_DATA_U32(buffer);
@@ -482,15 +474,15 @@ void read_mavlink(){
 }
 
 #ifdef FRSKY
-void setBaroAltitude(float baroAltitude)
+void setBaroAltitude(float baro_altitude)
 {
-  if (!_altitudeOffset)
-    _altitudeOffset = -baroAltitude;
+  if (!_altitude_offset)
+    _altitude_offset = -baro_altitude;
 
-  baroAltitude += _altitudeOffset;
-  _baroAltitude = baroAltitude;
-  if (_baroAltitude < 0 || _baroAltitude > 1000000) {
-    _baroAltitude = 0;
+  baro_altitude += _altitude_offset;
+  _baro_altitude = baro_altitude;
+  if (_baro_altitude < 0 || _baro_altitude > 1000000) {
+    _baro_altitude = 0;
   }
 }
 #endif

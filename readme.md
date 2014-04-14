@@ -16,11 +16,15 @@ Installation:
 
 Working:
 - battery voltage from current sensor
-- cell voltage (in remaining battery slot) from lipo voltage sensor
-- amperage (to be tested) from current sensor
+- cell voltage (in temperature slot) from lipo voltage sensor
+- amperage from current sensor
 - altitude form bario sensor
 - low battery warning
 - you can use Config. Tool to edit the settings
+
+Todo : 
+- gps sensor integration
+- rssi ?
 
 I used the following sources to write it:
 - https://code.google.com/p/minimosd-extra
