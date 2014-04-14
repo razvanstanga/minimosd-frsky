@@ -72,6 +72,7 @@ unsigned int   osd_swr;
 //unsigned int   osd_rssi;
 float          _cellVoltage;
 static float   osd_analog_batt = 0;                 // Battery A voltage in milivolt
+float          pack_max_voltage;
 
 #endif
 
@@ -232,11 +233,18 @@ void read_mavlink(){
                   //Serial.println (float(osd_vbat_A/100));
                   osd_vbat_A = float(osd_vbat_A/100);
                   
+                  if(osd_vbat_A > 21) cell_count = 6;
+                  else if (osd_vbat_A > 16.8 && cell_count != 6) cell_count = 5;
+                  else if(osd_vbat_A > 12.6 && cell_count != 5) cell_count = 4;
+                  else if(osd_vbat_A > 8.4 && cell_count != 4) cell_count = 3;
+                  else if(osd_vbat_A > 4.2 && cell_count != 3) cell_count = 2;
+                  else cell_count = 0;
+                  
                 } else if (appId >= CURR_FIRST_ID && appId <= CURR_LAST_ID) {
                   osd_curr_A = SPORT_DATA_U32(buffer);
                   osd_curr_A = float(osd_curr_A/100);
                   unsigned long now = micros();
-                  //osd_battery_remaining_A += (long)osd_curr_A * 1000 / (3600000000 / (now - _uptime));
+                  //osd_battery_remaining_A = (long)osd_curr_A * 1000 / (3600000000 / (now - _uptime));
                   //Serial.println ("osd_curr_A");
                   //Serial.println (osd_curr_A);
                   
@@ -249,7 +257,11 @@ void read_mavlink(){
                   _cellVoltage = ((((cells & 0x000FFF00) >> 8) / 10)*2);
                   //Serial.println ("cellVoltage");
                   //Serial.println ( cellVoltage/100, 2 );
-                   osd_battery_remaining_A = float(_cellVoltage/100);
+                  // use cells as temperature to use CT
+                  _cellVoltage = float(_cellVoltage/100);
+                  osd_battery_remaining_A = ((_cellVoltage-3.72)*100) / (4.2-3.72);
+                  
+                  temperature = _cellVoltage;
                   
                 } else if (appId >= GPS_SPEED_FIRST_ID && appId <= GPS_SPEED_LAST_ID) {
                    osd_groundspeed = SPORT_DATA_U32(buffer);

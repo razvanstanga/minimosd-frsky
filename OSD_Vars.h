@@ -68,17 +68,15 @@ static uint8_t      high = 0;
 static int16_t      temps = 0;
 static float        osd_vbat_A = 0;                 // Battery A voltage in milivolt
 #ifdef FRSKY
+uint8_t             cell_count = 0;
 static float        osd_curr_A = 0;                 // Battery A current
 #else
 static int16_t      osd_curr_A = 0;                 // Battery A current
 #endif
 static float        mah_used = 0;
-#ifdef FRSKY
-static float        osd_battery_remaining_A = 0;    // 0 to 100 <=> 0 to 1000
-#else
 static int8_t       osd_battery_remaining_A = 0;    // 0 to 100 <=> 0 to 1000
-#endif
 static uint8_t      batt_warn_level = 0;
+
 
 //static uint8_t    osd_battery_pic_A = 0xb4;       // picture to show battery remaining
 //static float      osd_vbat_B = 0;               // voltage in milivolt
@@ -144,7 +142,11 @@ static int8_t       osd_COG_arrow_rotate_int;
 
 static float        osd_groundspeed = 0;            // ground speed
 static uint8_t     osd_throttle = 0;               // throtle
+#ifdef FRSKY
+static float        temperature = 0;
+#else
 static uint16_t     temperature = 0;
+#endif
 static uint8_t      tempconv = 1;
 static uint16_t     tempconvAdd = 0;
 static byte     distchar = 0;

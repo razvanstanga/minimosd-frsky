@@ -198,7 +198,12 @@ void panTemp(int first_col, int first_line){
     osd.setPanel(first_col, first_line);
     osd.openPanel();
 //    osd.printf("%c%5.1f%c", 0x0a, (float(temperature * tempconv + tempconvAdd) / 100), temps);
+#ifdef FRSKY
+    //osd.printf("%c%5.2f%c", 0x17, (double)temperature, 0x0d);
+    osd.printf("%c%4.2f%c", 0x17, (double)temperature, 0x0d);
+#else
     osd.printf("%5.1f%c", (float(temperature * tempconv + tempconvAdd) / 1000), temps);
+#endif    
     osd.closePanel();
 }
 
@@ -716,7 +721,7 @@ void panWarn(int first_col, int first_line){
           }
  if (rotation > 5) rotation = 0;
 #ifdef FRSKY
-  if (warning[4] == 1 && rotation == 5) {
+  if (warning[4] == 1 && rotation == 5 || rotation == 1) {
         osd.printf("%s",warning_string);  
   }
 #else
@@ -753,11 +758,11 @@ void panBatteryPercent(int first_col, int first_line){
     osd.openPanel();
     
     if (EEPROM.read(OSD_BATT_SHOW_PERCENT_ADDR) == 1){
-#ifdef FRSKY
-        osd.printf("%c%5.2f%c", 0x17, (double)osd_battery_remaining_A, 0x25);
-#else
+//#ifdef FRSKY
+//        osd.printf("%c%5.2f%c", 0x17, (double)osd_battery_remaining_A, 0x25);
+//#else
         osd.printf("%c%3.0i%c", 0x17, osd_battery_remaining_A, 0x25);
-#endif        
+
     }else{
         osd.printf("%c%4.0f%c", 0x17, mah_used, 0x01);
     }
