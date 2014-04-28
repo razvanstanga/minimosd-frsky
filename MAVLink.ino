@@ -1,5 +1,7 @@
+#ifndef FRSKY
 #include "../GCS_MAVLink/include/mavlink/v1.0/mavlink_types.h"
 #include "../GCS_MAVLink/include/mavlink/v1.0/ardupilotmega/mavlink.h"
+#endif
 
 #ifdef FRSKY
 
@@ -44,7 +46,6 @@
 #define VFAS_LAST_ID       0x021f
 #define CELLS_FIRST_ID     0x0300
 #define CELLS_LAST_ID      0x030f
-
 #define GPS_LONG_LATI_FIRST_ID  0x0800
 #define GPS_LONG_LATI_LAST_ID   0x080f
 #define GPS_ALT_FIRST_ID        0x0820
@@ -55,17 +56,50 @@
 #define GPS_COURS_LAST_ID       0x084f
 #define GPS_TIME_DATE_FIRST_ID  0x0850
 #define GPS_TIME_DATE_LAST_ID   0x085f
+#define EARTH_RADIUS ((uint32_t)111194)
 
 #define SPORT_DATA_U8(packet)   (buffer[4])
 #define SPORT_DATA_S32(packet)  (*((int32_t *)(buffer+4)))
 #define SPORT_DATA_U32(packet)  (*((uint32_t *)(buffer+4)))
+
+int32_t  gpsAltitude;
+int32_t  gpsAltitudeOffset;
+uint8_t  gpsDistNeeded;
+int8_t   gpsFix;           // -1=never fixed, 0=fix lost, 1=fixed
+int16_t  gpsAltitude_bp;   // 0x01   before punct
+uint32_t distFromEarthAxis;//        2 spares reused
+int16_t  gpsAltitude_ap;   // 0x01+8 after punct
+uint16_t gpsSpeed_bp;      // 0x11   before punct
+uint16_t gpsLongitude_bp;  // 0x12   before punct
+uint16_t gpsLatitude_bp;   // 0x13   before punct
+uint16_t gpsCourse_bp;     // 0x14   before punct (0..359.99 deg. -- seemingly 2-decimal precision)
+uint16_t gpsSpeed_ap;      // 0x11+8
+uint16_t gpsLongitude_ap;  // 0x12+8
+uint16_t gpsLatitude_ap;   // 0x13+8
+uint16_t gpsCourse_ap;     // 0x14+8
+uint32_t pilotLatitude;    //        2 spares reused
+uint32_t pilotLongitude;   //        2 spares reused
+uint16_t gpsLongitudeEW;   // 0x1A+8 East/West
+uint16_t gpsLatitudeNS;    // 0x1B+8 North/South
+uint16_t gpsDistance;
+//uint16_t isqrt32(uint32_t n);
 
 unsigned long _baro_altitude;
 unsigned long _altitude_offset;
 unsigned long _uptime;
 unsigned int  _osd_swr;
 float         _cell_voltage;
-static float  _osd_analog_batt = 0;                 // Battery A voltage in milivolt
+static float  _osd_analog_batt = 0;
+bool          _sensorVario = false;
+bool          _sensorCurrent = false;
+bool          _sensorGps = false;
+bool          _sensorFlvss = false;
+
+uint8_t  cellsCount;
+uint16_t cellVolts[12];
+int16_t  cellsSum;
+uint8_t  minCellIdx;
+uint16_t minCellVolts;
 
 #endif
 
@@ -100,21 +134,6 @@ void read_mavlink(){
     static byte buffer[FRSKY_RX_PACKET_SIZE];
     static byte bufferIndex = 0;
     static byte dataState = STATE_DATA_IDLE;
-
-#ifdef FRSKY_DEBUG
-    if ( Serial.available() ) {
-      osd.setPanel(5,9);
-      osd.openPanel();
-      osd.printf("%s", "serial available");
-      osd.closePanel();
-    } else {
-      osd.setPanel(5,9);
-      osd.openPanel();
-      osd.printf("%s", "serial not available");
-      osd.closePanel();
-    }
-#endif
-
 
     //grabing data 
     while(Serial.available() > 0) { 
@@ -194,85 +213,90 @@ void read_mavlink(){
     
                 if (appId == RSSI_ID) {
                   osd_rssi = SPORT_DATA_U8(buffer);
-                  //Serial.println ("osd_rssi");
-                  //Serial.println (osd_rssi);
                 }
                 if (appId == SWR_ID) {
                   _osd_swr = SPORT_DATA_U8(buffer);
-                  //Serial.println ("osd_swr");
-                  //Serial.println (osd_swr);                  
                 }
                 if (appId == BATT_ID) {
                   _osd_analog_batt = SPORT_DATA_U8(buffer);
-                  //Serial.println ("osd_analog_batt");
-                  //Serial.println (_osd_analog_batt);                                    
                 }
     
                 if (appId >= VARIO_FIRST_ID && appId <= VARIO_LAST_ID) {
+                  _sensorVario = true;
                   osd_airspeed = SPORT_DATA_S32(buffer);
-                  //Serial.println ("osd_airspeed");
-                  //Serial.println (osd_airspeed);
-                  
                 } else if (appId >= ALT_FIRST_ID && appId <= ALT_LAST_ID) {
-                  //if (_altitudeOffset == 0) _altitudeOffset = -SPORT_DATA_S32(buffer);
-                  
+                  _sensorVario = true;
                   setBaroAltitude( SPORT_DATA_S32(buffer) );
-                  //Serial.println ("osd_alt");
-                  //Serial.println (_baro_altitude/100, 2);
                   osd_alt = float(_baro_altitude/100);
                 } else if (appId >= VFAS_FIRST_ID && appId <= VFAS_LAST_ID) {
+                  _sensorCurrent = true;
                   osd_vbat_A = SPORT_DATA_U32(buffer);
-                  //Serial.println ("osd_vbat_A");
-                  //Serial.println (float(osd_vbat_A/100));
                   osd_vbat_A = float(osd_vbat_A/100);
-                  
+/*                  
                   if(osd_vbat_A > 21) cell_count = 6;
                   else if (osd_vbat_A > 16.8 && cell_count != 6) cell_count = 5;
                   else if(osd_vbat_A > 12.6 && cell_count != 5) cell_count = 4;
                   else if(osd_vbat_A > 8.4 && cell_count != 4) cell_count = 3;
                   else if(osd_vbat_A > 4.2 && cell_count != 3) cell_count = 2;
                   else cell_count = 0;
+*/                  
+                  cell_count = cellsCount;
                   
                 } else if (appId >= CURR_FIRST_ID && appId <= CURR_LAST_ID) {
+                  _sensorCurrent = true;
                   osd_curr_A = SPORT_DATA_U32(buffer);
                   osd_curr_A = float(osd_curr_A/100);
                   unsigned long now = micros();
                   //osd_battery_remaining_A = (long)osd_curr_A * 1000 / (3600000000 / (now - _uptime));
-                  //Serial.println ("osd_curr_A");
-                  //Serial.println (osd_curr_A);
                   //_uptime = now;
                 } else if (appId >= CELLS_FIRST_ID && appId <= CELLS_LAST_ID) {
+                  _sensorFlvss = true;
+                  
                   uint32_t cells = SPORT_DATA_U32(buffer);
                   uint8_t battnumber = cells & 0xF;
-                  //Serial.println ("battnumber");
-                  //Serial.println (battnumber);
+                  uint32_t minCell, minCellNum;
+
+                  cellVolts[battnumber] = ((cells & 0x000FFF00) >> 8) / 10;
+                  cellVolts[battnumber+1] = ((cells & 0xFFF00000) >> 20) / 10;
+          
+                  if (cellsCount < battnumber+2)
+                    cellsCount = battnumber+2;
+                  if (cellVolts[battnumber+1] == 0)
+                    cellsCount--;
+          
+                  if ((cellVolts[battnumber] < cellVolts[battnumber+1]) || (cellVolts[battnumber+1] == 0)) {
+                    minCell = cellVolts[battnumber];
+                    minCellNum = battnumber;
+                  } else {
+                    minCell = cellVolts[battnumber+1];
+                    minCellNum = battnumber+1;
+                  }
+          
+                  if (!minCellVolts || minCell < minCellVolts || minCellNum==minCellIdx) {
+                    minCellIdx = minCellNum;
+                    minCellVolts = minCell;
+                  }
+
                   _cell_voltage = ((((cells & 0x000FFF00) >> 8) / 10)*2);
-                  //Serial.println ("cell_voltage");
-                  //Serial.println ( cell_voltage/100, 2 );
-                  // use cells as temperature to use CT
                   _cell_voltage = float(_cell_voltage/100);
                   osd_battery_remaining_A = ((_cell_voltage-3.72)*100) / (4.2-3.72);
-                  
+                
+                  // use cells as temperature to use CT
                   temperature = _cell_voltage;
                   
                 } else if (appId >= GPS_SPEED_FIRST_ID && appId <= GPS_SPEED_LAST_ID) {
+                   _sensorGps =  true;                  
                    osd_groundspeed = SPORT_DATA_U32(buffer);
                    osd_groundspeed = (osd_groundspeed * 46) / 25 / 1000;
-                   //Serial.println ("osd_groundspeed");
-                   //Serial.println (osd_groundspeed);                   
-                   
                 } else if (appId >= GPS_COURS_FIRST_ID && appId <= GPS_COURS_LAST_ID) {
-                   osd_heading = SPORT_DATA_U32(buffer);
-                   //frskyData.hub.gpsCourse_bp = course / 100;
-                   //frskyData.hub.gpsCourse_ap = course % 100;  
-                   //Serial.println ("osd_heading");
-                   //Serial.println (osd_heading);                                      
-                   
+                    _sensorGps =  true;
+                    uint32_t course = SPORT_DATA_U32(buffer);
+                    gpsCourse_bp = course / 100;
+                    gpsCourse_ap = course % 100;
+                    osd_heading = gpsCourse_bp;
                 } else if (appId >= GPS_TIME_DATE_FIRST_ID && appId <= GPS_TIME_DATE_LAST_ID) {
+                    _sensorGps =  true;
                     uint32_t gps_time_date = SPORT_DATA_U32(buffer);
-                    //Serial.println ("gps_time_date");
-                    //Serial.println (gps_time_date);                                                          
-                    
                     if (gps_time_date & 0x000000ff) {
                       //frskyData.hub.year = (uint16_t) ((gps_time_date & 0xff000000) >> 24);
                       //frskyData.hub.month = (uint8_t) ((gps_time_date & 0x00ff0000) >> 16);
@@ -284,42 +308,108 @@ void read_mavlink(){
                       //frskyData.hub.sec = (uint16_t) ((gps_time_date & 0x0000ff00) >> 8);
                       //frskyData.hub.hour = ((uint8_t) (frskyData.hub.hour + g_eeGeneral.timezone + 24)) % 24;
                     }
-                   
                 } else if (appId >= GPS_ALT_FIRST_ID && appId <= GPS_ALT_LAST_ID) {
-                   //osd_alt = SPORT_DATA_S32(buffer);   
-                   
+                  _sensorGps =  true;
+                  gpsAltitude = SPORT_DATA_S32(buffer);
+                  
+                  if (!gpsAltitudeOffset)
+                    gpsAltitudeOffset = gpsAltitude;
+
+                  if (_sensorVario) {
+                    osd_home_alt = osd_alt - (gpsAltitude/100 - gpsAltitudeOffset/100)*0.001;
+                  } else {
+                    osd_home_alt = gpsAltitudeOffset/100;
+                    osd_alt = (gpsAltitude - gpsAltitudeOffset)/100;
+                  }
+
+/*        
+                  if (!baroAltitudeOffset) {
+                    int altitude = TELEMETRY_RELATIVE_GPS_ALT_BP;
+                    if (altitude > frskyData.hub.maxAltitude)
+                      frskyData.hub.maxAltitude = altitude;
+                    if (altitude < frskyData.hub.minAltitude)
+                      frskyData.hub.minAltitude = altitude;
+                  }
+*/                  
+/*          
+                  if (gpsFix > 0) {
+                    if (!pilotLatitude && !pilotLongitude) {
+                      // First received GPS position => Pilot GPS position
+          	      getGpsPilotPosition();
+                    }
+                    getGpsDistance();
+                  }
+*/                   
+                
                 } else if (appId >= GPS_LONG_LATI_FIRST_ID && appId <= GPS_LONG_LATI_LAST_ID) {
-                    uint32_t gps_long_lati_data = SPORT_DATA_U32(buffer);
-                    uint32_t gps_long_lati_b1w, gps_long_lati_a1w;
-                    gps_long_lati_b1w = (gps_long_lati_data & 0x3fffffff) / 10000;
-                    gps_long_lati_a1w = (gps_long_lati_data & 0x3fffffff) % 10000;
-                    osd_heading = 0;
-                    switch ((gps_long_lati_data & 0xc0000000) >> 30) {
-                      case 0:
-                        osd_lat = (gps_long_lati_b1w / 60 * 100) + (gps_long_lati_b1w % 60);
-                        //osd_lat = gps_long_lati_a1w;
-                        //frskyData.hub.gpsLatitudeNS = 'N';
-                        osd_heading = 0;
-                        break;
-                      case 1:
-                        osd_lat = (gps_long_lati_b1w / 60 * 100) + (gps_long_lati_b1w % 60);
-                        //osd_lat = gps_long_lati_a1w;
-                        //frskyData.hub.gpsLatitudeNS = 'S';
-                        osd_heading = 90;
-                        break;
-                      case 2:
-                        osd_lon = (gps_long_lati_b1w / 60 * 100) + (gps_long_lati_b1w % 60);
-                        //osd_lon = gps_long_lati_a1w;
-                        //frskyData.hub.gpsLongitudeEW = 'E';
-                        osd_heading = 180;
-                        break;
-                      case 3:
-                        osd_lon = (gps_long_lati_b1w / 60 * 100) + (gps_long_lati_b1w % 60);
-                        //osd_lon = gps_long_lati_a1w;
-                        //frskyData.hub.gpsLongitudeEW = 'W';
-                        osd_heading = 360;
-                        break;
-                    }                   
+                  _sensorGps =  true;
+                   uint32_t gps_long_lati_data = SPORT_DATA_U32(buffer); 
+                   uint32_t gps_long_lati_b1w, gps_long_lati_a1w;
+                   
+                   float deg = 0;
+                   float mm = 0;
+                   float ss = 0;
+                   
+                   gps_long_lati_b1w = (gps_long_lati_data & 0x3fffffff) / 10000; 
+                   gps_long_lati_a1w = (gps_long_lati_data & 0x3fffffff) % 10000; 
+              
+                   switch ((gps_long_lati_data & 0xc0000000) >> 30) { 
+                     case 0: 
+                       gpsLatitude_bp = (gps_long_lati_b1w / 60 * 100) + (gps_long_lati_b1w % 60);
+                       gpsLatitude_ap = gps_long_lati_a1w;
+                       
+                       deg = (float) gpsLatitude_bp/100;
+                       mm = (float) (gpsLatitude_bp % 100)/60;
+                       ss = (float) (( gpsLatitude_ap * 6)/1000)/3600;
+                       osd_lat = 1 * ( deg + mm + ss );
+                       gpsLatitudeNS = 'N'; 
+                       break; 
+                     case 1: 
+                       gpsLatitude_bp = (gps_long_lati_b1w / 60 * 100) + (gps_long_lati_b1w % 60); 
+                       gpsLatitude_ap = gps_long_lati_a1w; 
+                      
+                       deg = (float) gpsLatitude_bp/100;
+                       mm = (float) (gpsLatitude_bp % 100)/60;
+                       ss = (float) ((gpsLatitude_ap * 6)/1000)/3600;
+                       //osd_lat = -1 * ( deg + mm + ss );                       
+                       gpsLatitudeNS = 'S';
+                       break; 
+                     case 2: 
+                       gpsLongitude_bp = (gps_long_lati_b1w / 60 * 100) + (gps_long_lati_b1w % 60); 
+                       gpsLongitude_ap = gps_long_lati_a1w; 
+                       
+                       deg = (float) gpsLongitude_bp/100;
+                       mm = (float) (gpsLongitude_bp % 100)/60;
+                       ss = (float) ((gpsLongitude_ap * 6)/1000)/3600;
+                       osd_lon = 1 * ( deg + mm + ss );                                         
+                       gpsLongitudeEW = 'E';
+                       break; 
+                     case 3: 
+                       gpsLongitude_bp = (gps_long_lati_b1w / 60 * 100) + (gps_long_lati_b1w % 60); 
+                       gpsLongitude_ap = gps_long_lati_a1w; 
+                       
+                       deg = (float) gpsLongitude_bp/100;
+                       mm = (float) (gpsLongitude_bp % 100)/60;
+                       ss = (float) ((gpsLongitude_ap * 6)/1000)/3600;
+                       //osd_lon = -1 * ( deg + mm + ss );                                             
+                       gpsLongitudeEW = 'W'; 
+                       break; 
+                   }
+                  if (gpsLongitudeEW && gpsLatitudeNS) {
+                    osd_fix_type = 3;
+                    gpsFix = 1;
+                    //extractLatitudeLongitude(&pilotLatitude, &pilotLongitude);
+                    //osd_lat = (float) pilotLatitude;
+                    //osd_lon = (float) pilotLongitude;
+                    if (!pilotLatitude && !pilotLongitude) {
+                      // First received GPS position => Pilot GPS position
+                      //getGpsPilotPosition();
+                    }                    
+                  }
+                  else if (gpsFix > 0) {
+                    osd_fix_type = 0;
+                    gpsFix = 0;
+                  }
                 }
                 break;
             }
@@ -485,4 +575,109 @@ void setBaroAltitude(float baro_altitude)
     _baro_altitude = 0;
   }
 }
+
+void extractLatitudeLongitude(uint32_t * latitude, uint32_t * longitude)
+{
+  div_t qr = div(gpsLatitude_bp, 100);
+  *latitude = ((uint32_t)(qr.quot) * 1000000) + (((uint32_t)(qr.rem) * 10000 + gpsLatitude_ap) * 5) / 3;
+
+  qr = div(gpsLongitude_bp, 100);
+  *longitude = ((uint32_t)(qr.quot) * 1000000) + (((uint32_t)(qr.rem) * 10000 + gpsLongitude_ap) * 5) / 3;
+}
+
+void getGpsPilotPosition()
+{
+  extractLatitudeLongitude(&pilotLatitude, &pilotLongitude);
+  uint32_t lat = pilotLatitude / 10000;
+  uint32_t angle2 = (lat*lat) / 10000;
+  uint32_t angle4 = angle2 * angle2;
+  distFromEarthAxis = 139*(((uint32_t)10000000-((angle2*(uint32_t)123370)/81)+(angle4/25))/12500);
+}
+
+void getGpsDistance()
+{
+  uint32_t lat, lng;
+
+  extractLatitudeLongitude(&lat, &lng);
+
+  uint32_t angle = (lat > pilotLatitude) ? lat - pilotLatitude : pilotLatitude - lat;
+  uint32_t dist = EARTH_RADIUS * angle / 1000000;
+  uint32_t result = dist*dist;
+
+  angle = (lng > pilotLongitude) ? lng - pilotLongitude : pilotLongitude - lng;
+  dist = distFromEarthAxis * angle / 1000000;
+  result += dist*dist;
+
+  dist = abs(gpsAltitude_bp);
+  result += dist*dist;
+
+  gpsDistance = isqrt32(result);
+}
+
+uint16_t isqrt32(uint32_t n)
+{
+    uint16_t c = 0x8000;
+    uint16_t g = 0x8000;
+
+    for(;;) {
+        if((uint32_t)g*g > n)
+            g ^= c;
+        c >>= 1;
+        if(c == 0)
+            return g;
+        g |= c;
+    }
+}
+
+#ifdef FRSKYNODEF
+void displayGpsTime()
+{
+  uint8_t att = (TELEMETRY_STREAMING() ? LEFT|LEADING0 : LEFT|LEADING0|BLINK);
+  lcd_outdezNAtt(CENTER_OFS+6*FW+5, STATUS_BAR_Y, frskyData.hub.hour, att, 2);
+  lcd_putcAtt(CENTER_OFS+8*FW+2, STATUS_BAR_Y, ':', att);
+  lcd_outdezNAtt(CENTER_OFS+9*FW+2, STATUS_BAR_Y, frskyData.hub.min, att, 2);
+  lcd_putcAtt(CENTER_OFS+11*FW-1, STATUS_BAR_Y, ':', att);
+  lcd_outdezNAtt(CENTER_OFS+12*FW-1, STATUS_BAR_Y, frskyData.hub.sec, att, 2);
+  lcd_status_line();
+}
+
+/*
+  // Latitude
+  displayGpsCoord(line, frskyData.hub.gpsLatitudeNS, frskyData.hub.gpsLatitude_bp, frskyData.hub.gpsLatitude_ap);
+  // Longitude
+  displayGpsCoord(line, frskyData.hub.gpsLongitudeEW, frskyData.hub.gpsLongitude_bp, frskyData.hub.gpsLongitude_ap);
+*/
+
+void displayGpsCoord(uint8_t y, char direction, int16_t bp, int16_t ap)
+{
+  if (frskyData.hub.gpsFix >= 0) {
+    if (!direction) direction = '-';
+    lcd_outdezAtt(TELEM_2ND_COLUMN, y, bp / 100, LEFT); // ddd before '.'
+    lcd_putc(lcdLastPos, y, '@');
+    uint8_t mn = bp % 100;
+    if (g_eeGeneral.gpsFormat == 0) {
+      lcd_putc(lcdLastPos+FWNUM, y, direction);
+      lcd_outdezNAtt(lcdLastPos+FW+FW+1, y, mn, LEFT|LEADING0, 2); // mm before '.'
+      lcd_vline(lcdLastPos, y, 2);
+      uint16_t ss = ap * 6;
+      lcd_outdezAtt(lcdLastPos+3, y, ss / 1000, LEFT); // ''
+      lcd_plot(lcdLastPos, y+FH-2, 0); // small decimal point
+      lcd_outdezAtt(lcdLastPos+2, y, ss % 1000, LEFT); // ''
+      lcd_vline(lcdLastPos, y, 2);
+      lcd_vline(lcdLastPos+2, y, 2);
+    }
+    else {
+      lcd_outdezNAtt(lcdLastPos+FW, y, mn, LEFT|LEADING0, 2); // mm before '.'
+      lcd_plot(lcdLastPos, y+FH-2, 0); // small decimal point
+      lcd_outdezNAtt(lcdLastPos+2, y, ap, LEFT|UNSIGN|LEADING0, 4); // after '.'
+      lcd_putc(lcdLastPos+1, y, direction);
+    }
+  }
+  else {
+    // no fix
+    lcd_puts(TELEM_2ND_COLUMN, y, STR_VCSWFUNC+1/*----*/);
+  }
+}
+#endif
+
 #endif

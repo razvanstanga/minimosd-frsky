@@ -20,10 +20,10 @@ Working:
 - amperage from current sensor
 - altitude form bario sensor
 - low battery warning
+- gps (wip)
 - you can use Config. Tool to edit the settings
 
-Todo : 
-- gps sensor integration
+Todo :
 - rssi ?
 
 I used the following sources to write it:

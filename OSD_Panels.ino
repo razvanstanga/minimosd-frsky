@@ -590,7 +590,11 @@ void panHomeAlt(int first_col, int first_line){
 //    osd.printf("%c%5.0f%c",0x12, (double)(osd_alt_to_home * converth), high);
 //    if (iconHA == 1) 
     if(EEPROM.read(SIGN_HA_ON_ADDR) != 0) osd.printf_P(PSTR("\x12"));
+#ifdef FRSKY
+    osd.printf("%5.0f%c", (double)(osd_home_alt), high);
+#else
     osd.printf("%5.0f%c", (double)(osd_alt_to_home * converth), high);
+#endif
     osd.closePanel();
 }
 
@@ -964,8 +968,9 @@ void panGPSats(int first_col, int first_line){
 void panGPS(int first_col, int first_line){
     osd.setPanel(first_col, first_line);
     osd.openPanel();
-//    osd.printf("%c%10.6f|%c%10.6f", 0x03, (double)osd_lat, 0x04, (double)osd_lon);
-    osd.printf("%11.6f|%11.6f", (double)osd_lat, (double)osd_lon);
+    //osd.printf("%c%10.6f|%c%10.6f", 0x03, (double)osd_lat, 0x04, (double)osd_lon);
+      //osd.printf("%11.6f|%11.6f", osd_lat, osd_lon);
+      osd.printf("%11.6f|%11.6f", osd_lat, osd_lon);
 //    if (blinker == 0) osd.printf("%c%10.6f", 0x03, (double)osd_lat);
 //    else osd.printf("%c%10.6f", 0x04, (double)osd_lon);
     osd.closePanel();

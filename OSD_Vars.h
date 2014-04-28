@@ -107,7 +107,10 @@ static unsigned long         osd_switch_time = 0;
 static float         palt = 0;
 static float        osd_climb = 0;
 //static float        descend = 0;
-
+#ifdef FRSKY
+static char        osd_lat_s;                    // latidude
+static char        osd_lon_s;                    // longitude
+#endif
 static float        osd_lat = 0;                    // latidude
 static float        osd_lon = 0;                    // longitude
 static uint8_t      osd_satellites_visible = 0;     // number of satelites
