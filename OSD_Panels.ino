@@ -534,7 +534,7 @@ void panCur_A(int first_col, int first_line){
     osd.openPanel();
 //    osd.printf("%c%5.2f%c", 0xbd, (float(osd_curr_A) * 0.01), 0x0e);
 #ifdef FRSKY
-    osd.printf("%c%5.2f%c", 0xbd, (double)osd_curr_A, 0x0e);
+    osd.printf("%c%5.2f%c", 0xbd, (float(osd_curr_A) * 0.01), 0x0e);
 #else
     osd.printf("%5.2f%c", (float(osd_curr_A) * 0.01), 0x0e);
 #endif
@@ -768,7 +768,8 @@ void panBatteryPercent(int first_col, int first_line){
         osd.printf("%c%3.0i%c", 0x17, osd_battery_remaining_A, 0x25);
 
     }else{
-        osd.printf("%c%4.0f%c", 0x17, mah_used, 0x01);
+        
+        osd.printf("%c%4.0f%c", 0x17, mah_used/1000, 0x01);
     }
     osd.closePanel();
 }

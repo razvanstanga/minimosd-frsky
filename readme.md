@@ -15,12 +15,12 @@ Installation:
 - upload
 
 Working:
-- battery voltage from current sensor
-- cell voltage (in temperature slot) from lipo voltage sensor
-- amperage from current sensor
-- altitude form bario sensor
+- battery voltage from current sensor (FCS-40A)
+- cell voltage (in temperature slot) from lipo voltage sensor (FLVSS)
+- amperage from current sensor, old hub vfas (FAS-40/FAS-100/FAS-100-XT) and new smart port (FCS-40A)
+- altitude form bario sensor (FVAS-02H)
+- gps (GPS V2)
 - low battery warning
-- gps (wip)
 - you can use Config. Tool to edit the settings
 
 Todo :

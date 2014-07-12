@@ -42,6 +42,10 @@
 #define ACCZ_LAST_ID       0x072f
 #define CURR_FIRST_ID      0x0200
 #define CURR_LAST_ID       0x020f
+#define CURRENT_ID         0x28
+#define VOLTS_BP_ID        0x3A
+#define VOLTS_AP_ID        0x3B
+#define VFAS_ID            0x39
 #define VFAS_FIRST_ID      0x0210
 #define VFAS_LAST_ID       0x021f
 #define CELLS_FIRST_ID     0x0300
@@ -77,11 +81,15 @@ uint16_t gpsSpeed_ap;      // 0x11+8
 uint16_t gpsLongitude_ap;  // 0x12+8
 uint16_t gpsLatitude_ap;   // 0x13+8
 uint16_t gpsCourse_ap;     // 0x14+8
+uint32_t tmpLatitude;
+uint32_t tmpLongitude;
 uint32_t pilotLatitude;    //        2 spares reused
 uint32_t pilotLongitude;   //        2 spares reused
 uint16_t gpsLongitudeEW;   // 0x1A+8 East/West
 uint16_t gpsLatitudeNS;    // 0x1B+8 North/South
 uint16_t gpsDistance;
+uint16_t volts_bp;         // 0x3A
+uint16_t volts_ap;         // 0x3B
 //uint16_t isqrt32(uint32_t n);
 
 unsigned long _baro_altitude;
@@ -220,6 +228,24 @@ void read_mavlink(){
                 if (appId == BATT_ID) {
                   _osd_analog_batt = SPORT_DATA_U8(buffer);
                 }
+                if (appId == CURRENT_ID) { // old vfas, works with data in from vario smart port
+                  _sensorCurrent = true;
+                  osd_curr_A = SPORT_DATA_U32(buffer);
+                  osd_curr_A = osd_curr_A * 10;
+                  unsigned long now = micros();
+                  mah_used += (long) osd_curr_A * 10000 / (3600000000 /
+                                                              (now - _uptime));
+                  _uptime = now;
+                }
+                if (appId == VOLTS_AP_ID) { // old vfas, works with data in from vario smart port
+                  _sensorCurrent = true;
+                  volts_ap = SPORT_DATA_U32(buffer);
+                  osd_vbat_A = (float) (((volts_bp * 100 + volts_ap * 10) * 21) / 110) / 10;
+                }
+                if (appId == VOLTS_BP_ID) { // old vfas, works with data in from vario smart port
+                  _sensorCurrent = true;
+                  volts_bp = SPORT_DATA_U32(buffer);
+                }
     
                 if (appId >= VARIO_FIRST_ID && appId <= VARIO_LAST_ID) {
                   _sensorVario = true;
@@ -231,7 +257,7 @@ void read_mavlink(){
                 } else if (appId >= VFAS_FIRST_ID && appId <= VFAS_LAST_ID) {
                   _sensorCurrent = true;
                   osd_vbat_A = SPORT_DATA_U32(buffer);
-                  osd_vbat_A = float(osd_vbat_A/100);
+                  osd_vbat_A = (float) osd_vbat_A/100;
 /*                  
                   if(osd_vbat_A > 21) cell_count = 6;
                   else if (osd_vbat_A > 16.8 && cell_count != 6) cell_count = 5;
@@ -240,15 +266,16 @@ void read_mavlink(){
                   else if(osd_vbat_A > 4.2 && cell_count != 3) cell_count = 2;
                   else cell_count = 0;
 */                  
-                  cell_count = cellsCount;
+                  //cell_count = cellsCount;
                   
                 } else if (appId >= CURR_FIRST_ID && appId <= CURR_LAST_ID) {
                   _sensorCurrent = true;
                   osd_curr_A = SPORT_DATA_U32(buffer);
-                  osd_curr_A = float(osd_curr_A/100);
+                  osd_curr_A = osd_curr_A * 10;
                   unsigned long now = micros();
-                  //osd_battery_remaining_A = (long)osd_curr_A * 1000 / (3600000000 / (now - _uptime));
-                  //_uptime = now;
+                  mah_used += (long) osd_curr_A * 10000 / (3600000000 /
+                                                              (now - _uptime));
+                  _uptime = now;
                 } else if (appId >= CELLS_FIRST_ID && appId <= CELLS_LAST_ID) {
                   _sensorFlvss = true;
                   
@@ -316,10 +343,10 @@ void read_mavlink(){
                     gpsAltitudeOffset = gpsAltitude;
 
                   if (_sensorVario) {
-                    osd_home_alt = osd_alt - (gpsAltitude/100 - gpsAltitudeOffset/100)*0.001;
+                    osd_home_alt = osd_alt;
                   } else {
                     osd_home_alt = gpsAltitudeOffset/100;
-                    osd_alt = (gpsAltitude - gpsAltitudeOffset)/100;
+                    osd_alt = gpsAltitude/100 - gpsAltitudeOffset/100;
                   }
 
 /*        
@@ -346,10 +373,6 @@ void read_mavlink(){
                    uint32_t gps_long_lati_data = SPORT_DATA_U32(buffer); 
                    uint32_t gps_long_lati_b1w, gps_long_lati_a1w;
                    
-                   float deg = 0;
-                   float mm = 0;
-                   float ss = 0;
-                   
                    gps_long_lati_b1w = (gps_long_lati_data & 0x3fffffff) / 10000; 
                    gps_long_lati_a1w = (gps_long_lati_data & 0x3fffffff) % 10000; 
               
@@ -358,53 +381,44 @@ void read_mavlink(){
                        gpsLatitude_bp = (gps_long_lati_b1w / 60 * 100) + (gps_long_lati_b1w % 60);
                        gpsLatitude_ap = gps_long_lati_a1w;
                        
-                       deg = (float) gpsLatitude_bp/100;
-                       mm = (float) (gpsLatitude_bp % 100)/60;
-                       ss = (float) (( gpsLatitude_ap * 6)/1000)/3600;
-                       osd_lat = 1 * ( deg + mm + ss );
-                       gpsLatitudeNS = 'N'; 
+                       extractLatitudeLongitude(&tmpLatitude, &tmpLongitude);
+                       osd_lat = (float) tmpLatitude/1000000;
+                       gpsLatitudeNS = 'N';
                        break; 
                      case 1: 
-                       gpsLatitude_bp = (gps_long_lati_b1w / 60 * 100) + (gps_long_lati_b1w % 60); 
-                       gpsLatitude_ap = gps_long_lati_a1w; 
+                       gpsLatitude_bp = (gps_long_lati_b1w / 60 * 100) + (gps_long_lati_b1w % 60);
+                       gpsLatitude_ap = gps_long_lati_a1w;
                       
-                       deg = (float) gpsLatitude_bp/100;
-                       mm = (float) (gpsLatitude_bp % 100)/60;
-                       ss = (float) ((gpsLatitude_ap * 6)/1000)/3600;
-                       //osd_lat = -1 * ( deg + mm + ss );                       
+                       extractLatitudeLongitude(&tmpLatitude, &tmpLongitude);
+                       osd_lat = (float) tmpLatitude/1000000;
                        gpsLatitudeNS = 'S';
                        break; 
                      case 2: 
-                       gpsLongitude_bp = (gps_long_lati_b1w / 60 * 100) + (gps_long_lati_b1w % 60); 
-                       gpsLongitude_ap = gps_long_lati_a1w; 
+                       gpsLongitude_bp = (gps_long_lati_b1w / 60 * 100) + (gps_long_lati_b1w % 60);
+                       gpsLongitude_ap = gps_long_lati_a1w;
                        
-                       deg = (float) gpsLongitude_bp/100;
-                       mm = (float) (gpsLongitude_bp % 100)/60;
-                       ss = (float) ((gpsLongitude_ap * 6)/1000)/3600;
-                       osd_lon = 1 * ( deg + mm + ss );                                         
+                       extractLatitudeLongitude(&tmpLatitude, &tmpLongitude);
+                       osd_lon = (float) tmpLongitude/1000000;
                        gpsLongitudeEW = 'E';
                        break; 
                      case 3: 
-                       gpsLongitude_bp = (gps_long_lati_b1w / 60 * 100) + (gps_long_lati_b1w % 60); 
-                       gpsLongitude_ap = gps_long_lati_a1w; 
+                       gpsLongitude_bp = (gps_long_lati_b1w / 60 * 100) + (gps_long_lati_b1w % 60);
+                       gpsLongitude_ap = gps_long_lati_a1w;
                        
-                       deg = (float) gpsLongitude_bp/100;
-                       mm = (float) (gpsLongitude_bp % 100)/60;
-                       ss = (float) ((gpsLongitude_ap * 6)/1000)/3600;
-                       //osd_lon = -1 * ( deg + mm + ss );                                             
-                       gpsLongitudeEW = 'W'; 
+                       extractLatitudeLongitude(&tmpLatitude, &tmpLongitude);
+                       osd_lon = (float) tmpLongitude/1000000;
+                       gpsLongitudeEW = 'W';
                        break; 
                    }
                   if (gpsLongitudeEW && gpsLatitudeNS) {
                     osd_fix_type = 3;
                     gpsFix = 1;
-                    //extractLatitudeLongitude(&pilotLatitude, &pilotLongitude);
-                    //osd_lat = (float) pilotLatitude;
-                    //osd_lon = (float) pilotLongitude;
+                    /*
                     if (!pilotLatitude && !pilotLongitude) {
                       // First received GPS position => Pilot GPS position
-                      //getGpsPilotPosition();
-                    }                    
+                      getGpsPilotPosition();
+                    }
+                    */                   
                   }
                   else if (gpsFix > 0) {
                     osd_fix_type = 0;
@@ -464,7 +478,7 @@ void read_mavlink(){
                 {
 
                     osd_vbat_A = (mavlink_msg_sys_status_get_voltage_battery(&msg) / 1000.0f); //Battery voltage, in millivolts (1 = 1 millivolt)
-                    osd_curr_A = mavlink_msg_sys_status_get_current_battery(&msg); //Battery current, in 10*milliamperes (1 = 10 milliampere)         
+                    osd_curr_A = mavlink_msg_sys_status_get_current_battery(&msg); //Battery current, in 10*milliamperes (1 = 10 milliampere)
                     osd_battery_remaining_A = mavlink_msg_sys_status_get_battery_remaining(&msg); //Remaining battery energy: (0%: 0, 100%: 100)
                     //osd_mode = apm_mav_component;//Debug
                     //osd_nav_mode = apm_mav_system;//Debug
