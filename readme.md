@@ -9,7 +9,7 @@ Installation:
 - mkdir ArduCAM_OSD
 - cd ArduCAM_OSD
 - git clone git://git.razvi.ro/minimosd-extra-frsky.git .
-- copy the the content of libraries in c:\Users\YourUser\Documents\Arduino\libraries\
+- copy the content of libraries in c:\Users\YourUser\Documents\Arduino\libraries\
 - open ArduCAM_OSD.ino in Arduino
 - select from Tools > Board > Arduino Pro or Pro Mini (5v, 16 MHz) w/ATmega328
 - upload
